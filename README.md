@@ -4,6 +4,8 @@ Real-time speech analysis tool that profiles speakers using AI. Captures system 
 
 ![Speech Profiler](https://img.shields.io/badge/Platform-Windows-blue) ![Python](https://img.shields.io/badge/Python-3.10+-green) ![License](https://img.shields.io/badge/License-MIT-yellow)
 
+![Screenshot](screenshot.png)
+
 ## Features
 
 - **Live Transcription** - Real-time speech-to-text using OpenAI Whisper

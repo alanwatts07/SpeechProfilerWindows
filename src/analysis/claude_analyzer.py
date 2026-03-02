@@ -59,44 +59,51 @@ class ClaudeAnalyzer:
         try:
             client = self._get_client()
 
-            prompt = f"""Analyze this person's speech patterns and provide insights about their personality, communication style, and DECEPTION MARKERS.
+            prompt = f"""You are analyzing speech for behavioral profiling. First, assess whether this transcription is usable.
 
 Speaker: {speaker_name}
 Text sample ({len(text.split())} words):
 "{text}"
 {deception_context}
 
-DECEPTION PATTERNS TO LOOK FOR:
-1. FALSE EMPATHY - Rich/powerful people saying "I feel your pain", "you're not alone", "I know how hard it is" (performative concern)
-2. FALSE RELATABILITY - "working families", "kitchen table", "putting food on the table" (millionaires pretending to be regular folks)
-3. BLAME SHIFTING - Mentioning other politicians/parties to deflect ("under [opponent]", "the previous administration")
-4. HEDGING - "I believe", "to my knowledge", "I don't recall" (avoiding commitment)
-5. NON-ANSWERS - "That's a great question", "Let me be clear" then not being clear
-6. WEASEL WORDS - "Some people say", "Many believe", "Studies show" (vague attribution)
-7. STATS AS MANIPULATION - Cherry-picked statistics to seem authoritative
-8. FAKE NICENESS - "With all due respect", "My good friend" (saccharine politeness)
-9. FUTURE FAKING - "We're looking into it", "Very soon" (vague promises)
-10. EMOTIONAL MANIPULATION - "Think of the children", "Our freedom" (appeals over substance)
+STEP 1 - COHERENCE CHECK:
+If the text contains any of the following, it is likely a transcription error or mixed audio and should NOT be analyzed:
+- Non-English characters mixed in (Chinese, Arabic, etc.)
+- Nonsensical word salad with no clear topic
+- Clearly multiple unrelated speakers whose lines are jumbled together
+- Random garbled phrases with no coherent meaning
+- Sudden unexplained topic jumps within a single sentence
 
-Based on this speech sample, provide a JSON response with:
+If the text fails the coherence check, respond with:
+{{"error": "transcription_noise", "reason": "brief explanation"}}
+
+STEP 2 - CONTEXT DETECTION:
+Identify the context before analyzing (e.g., sales pitch, casual conversation, teaching/explaining, debate, interview, storytelling). This shapes what patterns are normal vs. notable.
+
+STEP 3 - BEHAVIORAL ANALYSIS:
 {{
-    "personality_summary": "2-3 sentence summary of their personality",
-    "communication_style": "direct/indirect, formal/casual, etc.",
+    "personality_summary": "2-3 sentence summary of their communication personality",
+    "communication_style": "direct/indirect, formal/casual, analytical/emotional, etc.",
     "likely_values": ["3-5", "core", "values"],
-    "how_to_persuade": "Best approach to influence this person",
-    "rapport_tip": "One specific tip to build rapport right now",
-    "honesty_assessment": "honest/evasive/manipulative - BE HARSH, call out BS",
-    "deception_detected": ["list", "specific", "deception", "patterns", "found"],
-    "specific_red_flags": "Quote specific phrases that are manipulative or deceptive"
+    "how_to_persuade": "Best approach to build rapport or influence this person",
+    "rapport_tip": "One specific actionable tip to connect with them right now",
+    "honesty_assessment": "straightforward/evasive/performative - note if language seems genuine vs. scripted",
+    "deception_detected": ["only list patterns CLEARLY and unambiguously deceptive given the context"],
+    "skeptical_read": "What a suspicious observer COULD interpret as manipulative - quote specific phrases and name the technique (anchoring, false urgency, social proof, reciprocity, authority, etc). Be specific even if probably innocent.",
+    "charitable_read": "The more likely, innocent explanation for those same behaviors given the context"
 }}
 
-BE CRITICAL. If this sounds like a politician pandering, SAY SO. If they're using false empathy or relatability, CALL IT OUT.
+IMPORTANT:
+- Always fill in BOTH skeptical_read and charitable_read - the dual view is the core of the analysis
+- skeptical_read names real influence techniques even if the speaker is probably not being malicious
+- deception_detected is only for things genuinely deceptive regardless of interpretation
+- Sales pros asking qualifying questions, educators using structured language, storytellers using vivid framing - note in skeptical_read, explain in charitable_read
 
 Respond ONLY with the JSON object, no other text."""
 
             message = client.messages.create(
                 model="claude-sonnet-4-20250514",
-                max_tokens=500,
+                max_tokens=800,
                 messages=[{"role": "user", "content": prompt}]
             )
 
@@ -108,6 +115,12 @@ Respond ONLY with the JSON object, no other text."""
                 response_text = "\n".join(lines[1:-1])
 
             insights = json.loads(response_text)
+
+            # Discard if Claude flagged as transcription noise
+            if insights.get("error") == "transcription_noise":
+                logger.warning(f"Skipping analysis for {speaker_name}: {insights.get('reason', 'transcription noise')}")
+                return None
+
             logger.info(f"Claude analysis complete for {speaker_name}")
 
             # Save to database if requested
